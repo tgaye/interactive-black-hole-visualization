@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Black Hole Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        canvas {
+            display: block;
+        }
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 300px;
+            transition: all 0.3s ease;
+        }
+        #controls.collapsed {
+            transform: translateX(-90%);
+        }
+        #toggleControls {
+            position: absolute;
+            right: -30px;
+            top: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 0 5px 5px 0;
+            cursor: pointer;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        button {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        button:hover {
+            background: #555;
+        }
+        .color-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .color-control {
+            flex: 1;
+        }
+    </style>
+
+<base target="_self">
+
+
+    <div id="controls">
+        <button id="toggleControls">≡</button>
+        <h2>Black Hole Controls</h2>
+        
+        <div class="control-group">
+            <label for="cameraDistance">Camera Distance</label>
+            <input type="range" id="cameraDistance" min="5" max="50" value="20" step="1">
+        </div>
+        
+        <div class="control-group">
+            <label for="rotationSpeed">Rotation Speed</label>
+            <input type="range" id="rotationSpeed" min="0" max="2" value="0.5" step="0.1">
+        </div>
+        
+        <div class="control-group">
+            <label for="diskIntensity">Disk Intensity</label>
+            <input type="range" id="diskIntensity" min="0.1" max="2" value="1" step="0.1">
+        </div>
+        
+        <div class="control-group">
+            <label>Disk Color</label>
+            <div class="color-controls">
+                <div class="color-control">
+                    <label for="colorR">R</label>
+                    <input type="range" id="colorR" min="0" max="255" value="150" step="1">
+                </div>
+                <div class="color-control">
+                    <label for="colorG">G</label>
+                    <input type="range" id="colorG" min="0" max="255" value="100" step="1">
+                </div>
+                <div class="color-control">
+                    <label for="colorB">B</label>
+                    <input type="range" id="colorB" min="0" max="255" value="255" step="1">
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <button id="randomize">Randomize</button>
+            <button id="reset">Reset</button>
+        </div>
+        
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="mouseInteraction" checked="">
+                Enable Mouse Interaction
+            </label>
+        </div>
+    </div>
+
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000);
+        document.body.appendChild(renderer.domElement);
+
+        // Black hole parameters
+        let cameraDistance = 20;
+        let rotationSpeed = 0.5;
+        let diskIntensity = 1;
+        let diskColor = new THREE.Color(0x6496ff);
+        let mouseX = 0;
+        let mouseY = 0;
+        let mouseInteraction = true;
+
+        // Create black hole (sphere)
+        const blackHoleGeometry = new THREE.SphereGeometry(2, 64, 64);
+        const blackHoleMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const blackHole = new THREE.Mesh(blackHoleGeometry, blackHoleMaterial);
+        scene.add(blackHole);
+
+        // Create accretion disk
+        const diskGeometry = new THREE.TorusGeometry(3, 1, 32, 100);
+        const diskMaterial = new THREE.MeshBasicMaterial({ 
+            color: diskColor,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+        const disk = new THREE.Mesh(diskGeometry, diskMaterial);
+        disk.rotation.x = Math.PI / 2;
+        scene.add(disk);
+
+        // Create gravitational lensing effect (particles)
+        const particleCount = 500;
+        const particles = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+
+        for (let i = 0; i < particleCount; i++) {
+            const i3 = i * 3;
+            
+            // Position particles in a sphere around the black hole
+            const radius = 5 + Math.random() * 15;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.random() * Math.PI;
+            
+            positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+            positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+            positions[i3 + 2] = radius * Math.cos(phi);
+            
+            // Random colors with blue/purple tint
+            colors[i3] = 0.2 + Math.random() * 0.3;
+            colors[i3 + 1] = 0.1 + Math.random() * 0.2;
+            colors[i3 + 2] = 0.5 + Math.random() * 0.5;
+        }
+
+        particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const particleMaterial = new THREE.PointsMaterial({
+            size: 0.1,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const particleSystem = new THREE.Points(particles, particleMaterial);
+        scene.add(particleSystem);
+
+        // Camera position
+        camera.position.z = cameraDistance;
+
+        // UI Controls
+        document.getElementById('cameraDistance').addEventListener('input', (e) => {
+            cameraDistance = parseFloat(e.target.value);
+        });
+
+        document.getElementById('rotationSpeed').addEventListener('input', (e) => {
+            rotationSpeed = parseFloat(e.target.value);
+        });
+
+        document.getElementById('diskIntensity').addEventListener('input', (e) => {
+            diskIntensity = parseFloat(e.target.value);
+            diskMaterial.opacity = 0.5 * diskIntensity;
+        });
+
+        document.getElementById('colorR').addEventListener('input', updateDiskColor);
+        document.getElementById('colorG').addEventListener('input', updateDiskColor);
+        document.getElementById('colorB').addEventListener('input', updateDiskColor);
+
+        function updateDiskColor() {
+            const r = document.getElementById('colorR').value / 255;
+            const g = document.getElementById('colorG').value / 255;
+            const b = document.getElementById('colorB').value / 255;
+            diskColor.setRGB(r, g, b);
+            diskMaterial.color.copy(diskColor);
+        }
+
+        document.getElementById('randomize').addEventListener('click', () => {
+            // Randomize camera distance
+            cameraDistance = 10 + Math.random() * 30;
+            document.getElementById('cameraDistance').value = cameraDistance;
+            
+            // Randomize rotation speed
+            rotationSpeed = Math.random() * 2;
+            document.getElementById('rotationSpeed').value = rotationSpeed;
+            
+            // Randomize disk intensity
+            diskIntensity = 0.2 + Math.random() * 1.8;
+            document.getElementById('diskIntensity').value = diskIntensity;
+            diskMaterial.opacity = 0.5 * diskIntensity;
+            
+            // Randomize color
+            const r = Math.floor(Math.random() * 255);
+            const g = Math.floor(Math.random() * 255);
+            const b = Math.floor(Math.random() * 255);
+            document.getElementById('colorR').value = r;
+            document.getElementById('colorG').value = g;
+            document.getElementById('colorB').value = b;
+            diskColor.setRGB(r/255, g/255, b/255);
+            diskMaterial.color.copy(diskColor);
+        });
+
+        document.getElementById('reset').addEventListener('click', () => {
+            cameraDistance = 20;
+            rotationSpeed = 0.5;
+            diskIntensity = 1;
+            diskColor.setRGB(150/255, 100/255, 255/255);
+            
+            document.getElementById('cameraDistance').value = cameraDistance;
+            document.getElementById('rotationSpeed').value = rotationSpeed;
+            document.getElementById('diskIntensity').value = diskIntensity;
+            document.getElementById('colorR').value = 150;
+            document.getElementById('colorG').value = 100;
+            document.getElementById('colorB').value = 255;
+            
+            diskMaterial.opacity = 0.5 * diskIntensity;
+            diskMaterial.color.copy(diskColor);
+        });
+
+        document.getElementById('mouseInteraction').addEventListener('change', (e) => {
+            mouseInteraction = e.target.checked;
+        });
+
+        // Toggle controls panel
+        document.getElementById('toggleControls').addEventListener('click', () => {
+            document.getElementById('controls').classList.toggle('collapsed');
+        });
+
+        // Mouse movement
+        document.addEventListener('mousemove', (event) => {
+            mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+            mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+        });
+
+        // Touch support
+        document.addEventListener('touchmove', (event) => {
+            if (event.touches.length > 0) {
+                mouseX = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+                mouseY = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate disk
+            disk.rotation.z += 0.01 * rotationSpeed;
+            
+            // Position camera
+            const time = Date.now() * 0.0005;
+            if (mouseInteraction) {
+                camera.position.x = Math.sin(time) * cameraDistance + mouseX * 5;
+                camera.position.z = Math.cos(time) * cameraDistance + mouseY * 5;
+            } else {
+                camera.position.x = Math.sin(time) * cameraDistance;
+                camera.position.z = Math.cos(time) * cameraDistance;
+            }
+            camera.position.y = 5;
+            camera.lookAt(0, 0, 0);
+            
+            // Update particles for gravitational lensing effect
+            const positions = particles.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                
+                // Calculate distance from center
+                const dx = positions[i3];
+                const dy = positions[i3 + 1];
+                const dz = positions[i3 + 2];
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                
+                // Apply gravitational effect (move particles toward center)
+                const gravity = 0.01;
+                positions[i3] -= dx * gravity / dist;
+                positions[i3 + 1] -= dy * gravity / dist;
+                positions[i3 + 2] -= dz * gravity / dist;
+                
+                // If particle gets too close to center, reset it to outer edge
+                if (dist < 2.5) {
+                    const radius = 5 + Math.random() * 15;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.random() * Math.PI;
+                    
+                    positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                    positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                    positions[i3 + 2] = radius * Math.cos(phi);
+                }
+            }
+            particles.attributes.position.needsUpdate = true;
+            
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+
+              
+          
+                
+          
+              
